@@ -1,5 +1,5 @@
 // Configuração do Supabase
-const SUPABASE_URL = 'https://hpmnmcklygycxsqqoqak.supabase.co';
+const SUPABASE_URL = 'https://hpmnhcklygycxsqqoqak.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_szXj5gSZoACQW2fIW6xCug_LLCAFL3P';
 
 // Inicializar cliente do Supabase
