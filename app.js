@@ -22,53 +22,20 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-// GET via fetch normal — o Apps Script retorna CORS headers para GET com JSON
+// GET via AllOrigins CORS proxy — Resolve o bloqueio CORS no GitHub Pages
 async function loadClients() {
     try {
-        var response = await fetch(API_URL, { redirect: 'follow' });
-        var data = await response.json();
+        var proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(API_URL) + '&_nocache=' + Date.now();
+        var response = await fetch(proxyUrl);
+        var json = await response.json();
+        
+        // AllOrigins encapsula a resposta original em json.contents como uma string
+        var data = JSON.parse(json.contents);
         clients = Array.isArray(data) ? data : [];
         render();
     } catch (err) {
-        console.error('Erro ao carregar clientes:', err);
-        // Tenta fallback via JSONP se fetch falhar
-        return loadClientsJSONP();
+        console.error('Erro ao carregar clientes via Proxy:', err);
     }
-}
-
-// Fallback JSONP caso o fetch com CORS não funcione
-function loadClientsJSONP() {
-    return new Promise(function(resolve) {
-        var cbName = '_jsonp_cb_' + Date.now();
-        var script = document.createElement('script');
-
-        var timeout = setTimeout(function() {
-            delete window[cbName];
-            script.remove();
-            console.warn('JSONP timeout — mantendo lista atual');
-            resolve();
-        }, 10000);
-
-        window[cbName] = function(data) {
-            clearTimeout(timeout);
-            clients = Array.isArray(data) ? data : [];
-            render();
-            delete window[cbName];
-            script.remove();
-            resolve();
-        };
-
-        script.src = API_URL + '?callback=' + cbName;
-        script.onerror = function() {
-            clearTimeout(timeout);
-            delete window[cbName];
-            script.remove();
-            console.warn('JSONP falhou — mantendo lista atual');
-            resolve(); // resolve sem rejeitar para não bloquear o fluxo
-        };
-
-        document.head.appendChild(script);
-    });
 }
 
 function render(filter) {
