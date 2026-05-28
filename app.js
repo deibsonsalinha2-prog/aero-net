@@ -22,20 +22,49 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-// GET via AllOrigins CORS proxy — Resolve o bloqueio CORS no GitHub Pages
-async function loadClients() {
-    try {
-        var proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(API_URL) + '&_nocache=' + Date.now();
-        var response = await fetch(proxyUrl);
-        var json = await response.json();
+// GET via AllOrigins CORS proxy usando JSONP callback — 100% imune a qualquer bloqueio CORS
+function loadClients() {
+    return new Promise(function(resolve) {
+        var cbName = '_jsonp_cb_' + Date.now();
+        var script = document.createElement('script');
         
-        // AllOrigins encapsula a resposta original em json.contents como uma string
-        var data = JSON.parse(json.contents);
-        clients = Array.isArray(data) ? data : [];
-        render();
-    } catch (err) {
-        console.error('Erro ao carregar clientes via Proxy:', err);
-    }
+        // Timeout de segurança
+        var timeout = setTimeout(function() {
+            delete window[cbName];
+            script.remove();
+            console.warn('Timeout no carregamento');
+            resolve();
+        }, 12000);
+
+        window[cbName] = function(response) {
+            clearTimeout(timeout);
+            try {
+                // AllOrigins encapsula a resposta original em response.contents
+                var data = JSON.parse(response.contents);
+                clients = Array.isArray(data) ? data : [];
+                render();
+            } catch(e) {
+                console.error("Erro ao processar dados da API:", e);
+            }
+            delete window[cbName];
+            script.remove();
+            resolve();
+        };
+
+        // Solicita o AllOrigins retornando o script como JSONP callback
+        var targetUrl = encodeURIComponent(API_URL + '?_nocache=' + Date.now());
+        script.src = 'https://api.allorigins.win/get?url=' + targetUrl + '&callback=' + cbName;
+        
+        script.onerror = function() {
+            clearTimeout(timeout);
+            delete window[cbName];
+            script.remove();
+            console.error('Falha de rede no carregamento via Proxy');
+            resolve();
+        };
+
+        document.head.appendChild(script);
+    });
 }
 
 function render(filter) {
