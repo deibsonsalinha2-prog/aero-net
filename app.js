@@ -22,15 +22,22 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-async function loadClients() {
-    try {
-        const res = await fetch(API_URL);
-        const data = await res.json();
+function loadClients() {
+    const script = document.createElement('script');
+    const cbName = '_jsonp_cb_' + Date.now();
+    window[cbName] = function(data) {
         clients = data || [];
         render();
-    } catch (err) {
-        console.error(err);
-    }
+        delete window[cbName];
+        script.remove();
+    };
+    script.src = API_URL + '?callback=' + cbName;
+    script.onerror = function() {
+        console.error('Failed to load clients');
+        delete window[cbName];
+        script.remove();
+    };
+    document.head.appendChild(script);
 }
 
 function render(filter = '') {
