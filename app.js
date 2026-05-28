@@ -3,7 +3,7 @@ const SUPABASE_URL = 'https://hpmnmcklygycxsqqoqak.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_szXj5gSZoACQW2fIW6xCug_LLCAFL3P';
 
 // Inicializar cliente do Supabase
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let clients = [];
 let editingId = null;
@@ -30,7 +30,7 @@ function getStatusBadge(status) {
 // Ler clientes do Supabase (Super rápido, sem CORS e sem cache!)
 async function loadClients() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('clientes')
             .select('*')
             .order('created_at', { ascending: false });
@@ -113,7 +113,7 @@ form.addEventListener('submit', async (e) => {
     try {
         if (editingId) {
             // Atualizar cliente existente
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('clientes')
                 .update(clientData)
                 .eq('id', editingId);
@@ -122,7 +122,7 @@ form.addEventListener('submit', async (e) => {
             resetForm();
         } else {
             // Inserir novo cliente
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('clientes')
                 .insert([clientData]);
 
@@ -163,7 +163,7 @@ window.editClient = function(id) {
 window.deleteClient = async function(id) {
     if (confirm('Tem certeza que deseja excluir este cliente?')) {
         try {
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('clientes')
                 .delete()
                 .eq('id', id);
@@ -189,7 +189,7 @@ window.resetForm = function() {
 window.clearAllData = async function() {
     if (confirm('ATENÇÃO: Isso apagará TODOS os clientes do Supabase. Deseja continuar?')) {
         try {
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('clientes')
                 .delete()
                 .neq('id', '00000000-0000-0000-0000-000000000000'); // Apaga tudo
