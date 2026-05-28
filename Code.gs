@@ -1,51 +1,47 @@
-const SHEET_NAME = 'clientes';
+var SHEET_NAME = 'clientes';
 
-// Helper para retornar resposta com headers CORS
-function corsResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// GET — suporta JSONP (callback) e fetch normal
 function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const rows = data.slice(1).map(row => {
-    let obj = {};
-    headers.forEach((h, i) => obj[h] = row[i]);
-    return obj;
-  });
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var rows = [];
 
-  const callback = e.parameter && e.parameter.callback;
+  for (var i = 1; i < data.length; i++) {
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) {
+      obj[headers[j]] = data[i][j];
+    }
+    rows.push(obj);
+  }
+
+  var callback = e.parameter && e.parameter.callback;
   if (callback) {
-    // Resposta JSONP para compatibilidade (não usada mais, mas mantida como fallback)
-    return ContentService.createTextOutput(callback + '(' + JSON.stringify(rows) + ')')
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(rows) + ')')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
 
-  return corsResponse(rows);
+  return ContentService
+    .createTextOutput(JSON.stringify(rows))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-// POST — cadastrar novo cliente
 function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var body = JSON.parse(e.postData.contents);
 
-  // Suporte a action via query param para simular PUT/DELETE via POST
-  const action = e.parameter && e.parameter.action;
-
-  const body = JSON.parse(e.postData.contents);
-
-  if (action === 'put') {
-    return _updateClient(sheet, body);
-  }
-  if (action === 'delete') {
-    return _deleteClient(sheet, body);
+  if (body._method === 'PUT') {
+    return atualizarCliente(sheet, body);
   }
 
-  // Cadastro normal
-  const id = Utilities.getUuid();
-  const created_at = new Date().toISOString();
+  if (body._method === 'DELETE') {
+    return excluirCliente(sheet, body);
+  }
+
+  // Cadastrar novo cliente
+  var id = Utilities.getUuid();
+  var created_at = new Date().toISOString();
+
   sheet.appendRow([
     id,
     body.nome,
@@ -58,28 +54,18 @@ function doPost(e) {
     body.status,
     created_at
   ]);
-  return corsResponse({ id, created_at });
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ id: id, created_at: created_at }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-// PUT — atualizar cliente (tunnelado via POST?action=put)
-function doPut(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  const body = JSON.parse(e.postData.contents);
-  return _updateClient(sheet, body);
-}
+function atualizarCliente(sheet, body) {
+  var data = sheet.getDataRange().getValues();
 
-// DELETE — excluir cliente (tunnelado via POST?action=delete)
-function doDelete(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  const body = JSON.parse(e.postData.contents);
-  return _deleteClient(sheet, body);
-}
-
-function _updateClient(sheet, body) {
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
+  for (var i = 1; i < data.length; i++) {
     if (data[i][0] === body.id) {
-      sheet.getRange(i + 1, 2, 1, 8).setValues([[
+      var novosDados = [
         body.nome,
         body.documento,
         body.telefone,
@@ -88,20 +74,32 @@ function _updateClient(sheet, body) {
         body.valor_mensal,
         body.vencimento,
         body.status
-      ]]);
-      return corsResponse({ success: true });
+      ];
+      sheet.getRange(i + 1, 2, 1, 8).setValues([novosDados]);
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: true }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
   }
-  return corsResponse({ error: 'Not found' });
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ error: 'Not found' }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-function _deleteClient(sheet, body) {
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
+function excluirCliente(sheet, body) {
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
     if (data[i][0] === body.id) {
       sheet.deleteRow(i + 1);
-      return corsResponse({ success: true });
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: true }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
   }
-  return corsResponse({ error: 'Not found' });
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ error: 'Not found' }))
+    .setMimeType(ContentService.MimeType.JSON);
 }

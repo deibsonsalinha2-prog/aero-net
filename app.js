@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbzYgufF38grEgLwGOwkcbw_lt1adwDKyf5YvYFDpGROb_7Rf6pOvPkPo0tm4XivrmLpnA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwgP-h55N-lw8ZZl2DNm04WH1DvdeH1vTitRqWcJhg4185l2E7gyhfx-6I2da_qn5cJ5g/exec';
 
 let clients = [];
 let editingId = null;
@@ -22,18 +22,37 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-// ✅ CORRIGIDO: usa fetch com CORS ao invés de JSONP e retorna uma Promise real
-async function loadClients() {
-    try {
-        const response = await fetch(API_URL, {
-            method: 'GET',
-            redirect: 'follow'
-        });
-        clients = await response.json();
-        render();
-    } catch (err) {
-        console.error('Erro ao carregar clientes:', err);
-    }
+// ✅ JSONP envolto em Promise — compatível com await
+function loadClients() {
+    return new Promise((resolve, reject) => {
+        const cbName = '_jsonp_cb_' + Date.now();
+        const script = document.createElement('script');
+
+        const timeout = setTimeout(() => {
+            delete window[cbName];
+            script.remove();
+            reject(new Error('Timeout ao carregar clientes'));
+        }, 15000);
+
+        window[cbName] = function(data) {
+            clearTimeout(timeout);
+            clients = Array.isArray(data) ? data : [];
+            render();
+            delete window[cbName];
+            script.remove();
+            resolve();
+        };
+
+        script.src = API_URL + '?callback=' + cbName;
+        script.onerror = function() {
+            clearTimeout(timeout);
+            delete window[cbName];
+            script.remove();
+            reject(new Error('Erro de rede ao carregar clientes'));
+        };
+
+        document.head.appendChild(script);
+    });
 }
 
 function render(filter = '') {
@@ -83,14 +102,22 @@ function updateStats() {
     document.getElementById('stat-overdue').textContent = overdue;
 }
 
-// ✅ CORRIGIDO: removido mode:'no-cors' — agora o body é enviado corretamente
-// PUT/DELETE são tunelados via POST?action=put / POST?action=delete
-// pois o Google Apps Script ignora PUT e DELETE em alguns contextos de deploy
+// ✅ POST com mode:'no-cors' — o body text/plain É enviado ao servidor
+// PUT e DELETE são tunelados via _method no body (sem precisar de preflight CORS)
+function gasPost(payload) {
+    return fetch(API_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        redirect: 'follow',
+        body: JSON.stringify(payload)
+        // Sem Content-Type header → browser usa text/plain → sem preflight CORS
+    });
+}
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const clientData = {
-        id: editingId,
         nome: document.getElementById('nome').value,
         documento: document.getElementById('documento').value,
         telefone: document.getElementById('telefone').value,
@@ -101,32 +128,27 @@ form.addEventListener('submit', async (e) => {
         status: document.getElementById('status').value
     };
 
+    const originalText = btnSubmit.textContent;
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Salvando...';
 
     try {
         if (editingId) {
-            // Tunnela PUT via POST com query param ?action=put
-            await fetch(API_URL + '?action=put', {
-                method: 'POST',
-                redirect: 'follow',
-                body: JSON.stringify(clientData)
-            });
+            await gasPost({ ...clientData, id: editingId, _method: 'PUT' });
             resetForm();
         } else {
-            await fetch(API_URL, {
-                method: 'POST',
-                redirect: 'follow',
-                body: JSON.stringify(clientData)
-            });
+            await gasPost(clientData);
             form.reset();
         }
+
+        // Aguarda um segundo para o Apps Script processar antes de recarregar
+        await new Promise(r => setTimeout(r, 1200));
         await loadClients();
     } catch (err) {
         alert('Erro ao salvar: ' + err.message);
     } finally {
         btnSubmit.disabled = false;
-        btnSubmit.textContent = editingId ? 'Salvar Alterações' : 'Adicionar Cliente';
+        btnSubmit.textContent = originalText;
     }
 });
 
@@ -154,13 +176,9 @@ window.editClient = function(id) {
 window.deleteClient = async function(id) {
     if (confirm('Tem certeza que deseja excluir este cliente?')) {
         try {
-            // Tunnela DELETE via POST com query param ?action=delete
-            await fetch(API_URL + '?action=delete', {
-                method: 'POST',
-                redirect: 'follow',
-                body: JSON.stringify({ id })
-            });
+            await gasPost({ id, _method: 'DELETE' });
             if (editingId === id) resetForm();
+            await new Promise(r => setTimeout(r, 1200));
             await loadClients();
         } catch (err) {
             alert('Erro ao excluir: ' + err.message);
@@ -180,13 +198,10 @@ window.clearAllData = async function() {
     if (confirm('ATENÇÃO: Isso apagará TODOS os clientes. Deseja continuar?')) {
         try {
             for (const client of clients) {
-                await fetch(API_URL + '?action=delete', {
-                    method: 'POST',
-                    redirect: 'follow',
-                    body: JSON.stringify({ id: client.id })
-                });
+                await gasPost({ id: client.id, _method: 'DELETE' });
             }
             resetForm();
+            await new Promise(r => setTimeout(r, 1200));
             await loadClients();
         } catch (err) {
             alert('Erro: ' + err.message);
