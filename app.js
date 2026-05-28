@@ -22,28 +22,24 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-function loadClients() {
-    const script = document.createElement('script');
-    const cbName = '_jsonp_cb_' + Date.now();
-    window[cbName] = function(data) {
-        clients = data || [];
+// ✅ CORRIGIDO: usa fetch com CORS ao invés de JSONP e retorna uma Promise real
+async function loadClients() {
+    try {
+        const response = await fetch(API_URL, {
+            method: 'GET',
+            redirect: 'follow'
+        });
+        clients = await response.json();
         render();
-        delete window[cbName];
-        script.remove();
-    };
-    script.src = API_URL + '?callback=' + cbName;
-    script.onerror = function() {
-        console.error('Failed to load clients');
-        delete window[cbName];
-        script.remove();
-    };
-    document.head.appendChild(script);
+    } catch (err) {
+        console.error('Erro ao carregar clientes:', err);
+    }
 }
 
 function render(filter = '') {
     const filtered = clients.filter(c =>
-        c.nome.toLowerCase().includes(filter.toLowerCase()) ||
-        c.documento.includes(filter)
+        (c.nome || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (c.documento || '').includes(filter)
     );
 
     tableBody.innerHTML = '';
@@ -81,12 +77,15 @@ function render(filter = '') {
 
 function updateStats() {
     document.getElementById('stat-total').textContent = clients.length;
-    const revenue = clients.reduce((sum, c) => sum + parseFloat(c.valor_mensal), 0);
+    const revenue = clients.reduce((sum, c) => sum + parseFloat(c.valor_mensal || 0), 0);
     document.getElementById('stat-revenue').textContent = formatCurrency(revenue);
     const overdue = clients.filter(c => c.status === 'inadimplente').length;
     document.getElementById('stat-overdue').textContent = overdue;
 }
 
+// ✅ CORRIGIDO: removido mode:'no-cors' — agora o body é enviado corretamente
+// PUT/DELETE são tunelados via POST?action=put / POST?action=delete
+// pois o Google Apps Script ignora PUT e DELETE em alguns contextos de deploy
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -102,11 +101,14 @@ form.addEventListener('submit', async (e) => {
         status: document.getElementById('status').value
     };
 
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Salvando...';
+
     try {
         if (editingId) {
-            await fetch(API_URL, {
-                method: 'PUT',
-                mode: 'no-cors',
+            // Tunnela PUT via POST com query param ?action=put
+            await fetch(API_URL + '?action=put', {
+                method: 'POST',
                 redirect: 'follow',
                 body: JSON.stringify(clientData)
             });
@@ -114,7 +116,6 @@ form.addEventListener('submit', async (e) => {
         } else {
             await fetch(API_URL, {
                 method: 'POST',
-                mode: 'no-cors',
                 redirect: 'follow',
                 body: JSON.stringify(clientData)
             });
@@ -122,7 +123,10 @@ form.addEventListener('submit', async (e) => {
         }
         await loadClients();
     } catch (err) {
-        alert('Erro: ' + err.message);
+        alert('Erro ao salvar: ' + err.message);
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = editingId ? 'Salvar Alterações' : 'Adicionar Cliente';
     }
 });
 
@@ -150,16 +154,16 @@ window.editClient = function(id) {
 window.deleteClient = async function(id) {
     if (confirm('Tem certeza que deseja excluir este cliente?')) {
         try {
-            await fetch(API_URL, {
-                method: 'DELETE',
-                mode: 'no-cors',
+            // Tunnela DELETE via POST com query param ?action=delete
+            await fetch(API_URL + '?action=delete', {
+                method: 'POST',
                 redirect: 'follow',
                 body: JSON.stringify({ id })
             });
             if (editingId === id) resetForm();
             await loadClients();
         } catch (err) {
-            alert('Erro: ' + err.message);
+            alert('Erro ao excluir: ' + err.message);
         }
     }
 };
@@ -176,8 +180,9 @@ window.clearAllData = async function() {
     if (confirm('ATENÇÃO: Isso apagará TODOS os clientes. Deseja continuar?')) {
         try {
             for (const client of clients) {
-                await fetch(API_URL, {
-                    method: 'DELETE',
+                await fetch(API_URL + '?action=delete', {
+                    method: 'POST',
+                    redirect: 'follow',
                     body: JSON.stringify({ id: client.id })
                 });
             }
