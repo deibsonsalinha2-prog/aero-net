@@ -1,4 +1,9 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbwgP-h55N-lw8ZZl2DNm04WH1DvdeH1vTitRqWcJhg4185l2E7gyhfx-6I2da_qn5cJ5g/exec';
+// Configuração do Supabase
+const SUPABASE_URL = 'https://hpmnmcklygycxsqqoqak.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_szXj5gSZoACQW2fIW6xCug_LLCAFL3P';
+
+// Inicializar cliente do Supabase
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let clients = [];
 let editingId = null;
@@ -22,58 +27,28 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-// GET via AllOrigins CORS proxy usando JSONP callback — 100% imune a qualquer bloqueio CORS
-function loadClients() {
-    return new Promise(function(resolve) {
-        var cbName = '_jsonp_cb_' + Date.now();
-        var script = document.createElement('script');
-        
-        // Timeout de segurança
-        var timeout = setTimeout(function() {
-            delete window[cbName];
-            script.remove();
-            console.warn('Timeout no carregamento');
-            resolve();
-        }, 12000);
+// Ler clientes do Supabase (Super rápido, sem CORS e sem cache!)
+async function loadClients() {
+    try {
+        const { data, error } = await supabase
+            .from('clientes')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-        window[cbName] = function(response) {
-            clearTimeout(timeout);
-            try {
-                // AllOrigins encapsula a resposta original em response.contents
-                var data = JSON.parse(response.contents);
-                clients = Array.isArray(data) ? data : [];
-                render();
-            } catch(e) {
-                console.error("Erro ao processar dados da API:", e);
-            }
-            delete window[cbName];
-            script.remove();
-            resolve();
-        };
+        if (error) throw error;
 
-        // Solicita o AllOrigins retornando o script como JSONP callback (com cache-busting forte)
-        var cacheBuster = Date.now() + Math.random().toString(36).substring(2);
-        var targetUrl = encodeURIComponent(API_URL + '?_nocache=' + cacheBuster);
-        script.src = 'https://api.allorigins.win/get?url=' + targetUrl + '&callback=' + cbName;
-        
-        script.onerror = function() {
-            clearTimeout(timeout);
-            delete window[cbName];
-            script.remove();
-            console.error('Falha de rede no carregamento via Proxy');
-            resolve();
-        };
-
-        document.head.appendChild(script);
-    });
+        clients = data || [];
+        render();
+    } catch (err) {
+        console.error('Erro ao carregar clientes do Supabase:', err.message);
+    }
 }
 
-function render(filter) {
-    filter = filter || '';
-    var filtered = clients.filter(function(c) {
-        return (c.nome || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1 ||
-               (c.documento || '').indexOf(filter) !== -1;
-    });
+function render(filter = '') {
+    const filtered = clients.filter(c =>
+        (c.nome || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (c.documento || '').includes(filter)
+    );
 
     tableBody.innerHTML = '';
 
@@ -81,25 +56,26 @@ function render(filter) {
         emptyState.classList.remove('hidden');
     } else {
         emptyState.classList.add('hidden');
-        filtered.forEach(function(client) {
-            var tr = document.createElement('tr');
+        filtered.forEach(client => {
+            const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition-colors';
-            tr.innerHTML =
-                '<td class="px-6 py-4">' +
-                    '<div class="font-medium text-slate-900">' + client.nome + '</div>' +
-                    '<div class="text-xs text-slate-500">' + client.documento + ' • ' + client.telefone + '</div>' +
-                '</td>' +
-                '<td class="px-6 py-4">' +
-                    '<div class="text-slate-700">' + client.plano + '</div>' +
-                    '<div class="text-xs text-slate-400 truncate max-w-[120px]">' + client.endereco + '</div>' +
-                '</td>' +
-                '<td class="px-6 py-4 text-slate-600">Dia ' + client.vencimento + '</td>' +
-                '<td class="px-6 py-4 font-medium text-slate-700">' + formatCurrency(client.valor_mensal) + '</td>' +
-                '<td class="px-6 py-4">' + getStatusBadge(client.status) + '</td>' +
-                '<td class="px-6 py-4 text-right">' +
-                    '<button onclick="editClient(\'' + client.id + '\')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs mr-3">Editar</button>' +
-                    '<button onclick="deleteClient(\'' + client.id + '\')" class="text-rose-600 hover:text-rose-800 font-medium text-xs">Excluir</button>' +
-                '</td>';
+            tr.innerHTML = `
+                <td class="px-6 py-4">
+                    <div class="font-medium text-slate-900">${client.nome}</div>
+                    <div class="text-xs text-slate-500">${client.documento} • ${client.telefone}</div>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="text-slate-700">${client.plano}</div>
+                    <div class="text-xs text-slate-400 truncate max-w-[120px]">${client.endereco}</div>
+                </td>
+                <td class="px-6 py-4 text-slate-600">Dia ${client.vencimento}</td>
+                <td class="px-6 py-4 font-medium text-slate-700">${formatCurrency(client.valor_mensal)}</td>
+                <td class="px-6 py-4">${getStatusBadge(client.status)}</td>
+                <td class="px-6 py-4 text-right">
+                    <button onclick="editClient('${client.id}')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs mr-3">Editar</button>
+                    <button onclick="deleteClient('${client.id}')" class="text-rose-600 hover:text-rose-800 font-medium text-xs">Excluir</button>
+                </td>
+            `;
             tableBody.appendChild(tr);
         });
     }
@@ -109,26 +85,17 @@ function render(filter) {
 
 function updateStats() {
     document.getElementById('stat-total').textContent = clients.length;
-    var revenue = clients.reduce(function(sum, c) { return sum + parseFloat(c.valor_mensal || 0); }, 0);
+    const revenue = clients.reduce((sum, c) => sum + parseFloat(c.valor_mensal || 0), 0);
     document.getElementById('stat-revenue').textContent = formatCurrency(revenue);
-    var overdue = clients.filter(function(c) { return c.status === 'inadimplente'; }).length;
+    const overdue = clients.filter(c => c.status === 'inadimplente').length;
     document.getElementById('stat-overdue').textContent = overdue;
 }
 
-// Envia POST com no-cors (corpo text/plain é enviado sem preflight CORS)
-function gasPost(payload) {
-    return fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        redirect: 'follow',
-        body: JSON.stringify(payload)
-    });
-}
-
-form.addEventListener('submit', async function(e) {
+// Salvar / Editar cliente no Supabase
+form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    var clientData = {
+    const clientData = {
         nome: document.getElementById('nome').value,
         documento: document.getElementById('documento').value,
         telefone: document.getElementById('telefone').value,
@@ -139,36 +106,41 @@ form.addEventListener('submit', async function(e) {
         status: document.getElementById('status').value
     };
 
-    var originalText = btnSubmit.textContent;
+    const originalText = btnSubmit.textContent;
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Salvando...';
 
-    // 1. Salvar — erros aqui aparecem como "Erro ao salvar"
     try {
         if (editingId) {
-            await gasPost(Object.assign({}, clientData, { id: editingId, _method: 'PUT' }));
+            // Atualizar cliente existente
+            const { error } = await supabase
+                .from('clientes')
+                .update(clientData)
+                .eq('id', editingId);
+
+            if (error) throw error;
             resetForm();
         } else {
-            await gasPost(clientData);
+            // Inserir novo cliente
+            const { error } = await supabase
+                .from('clientes')
+                .insert([clientData]);
+
+            if (error) throw error;
             form.reset();
         }
+        
+        await loadClients();
     } catch (err) {
-        alert('Erro ao salvar: ' + err.message);
+        alert('Erro ao salvar no Supabase: ' + err.message);
+    } finally {
         btnSubmit.disabled = false;
         btnSubmit.textContent = originalText;
-        return;
     }
-
-    btnSubmit.disabled = false;
-    btnSubmit.textContent = originalText;
-
-    // 2. Recarregar lista — falhas aqui NÃO mostram "Erro ao salvar"
-    await new Promise(function(r) { setTimeout(r, 1500); });
-    await loadClients();
 });
 
 window.editClient = function(id) {
-    var client = clients.find(function(c) { return c.id === id; });
+    const client = clients.find(c => c.id === id);
     if (!client) return;
 
     editingId = id;
@@ -184,18 +156,24 @@ window.editClient = function(id) {
     formTitle.textContent = 'Editar Cliente';
     btnSubmit.textContent = 'Salvar Alterações';
     btnCancelEdit.classList.remove('hidden');
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.deleteClient = async function(id) {
     if (confirm('Tem certeza que deseja excluir este cliente?')) {
         try {
-            await gasPost({ id: id, _method: 'DELETE' });
+            const { error } = await supabase
+                .from('clientes')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
             if (editingId === id) resetForm();
-            await new Promise(function(r) { setTimeout(r, 1500); });
             await loadClients();
         } catch (err) {
-            alert('Erro ao excluir: ' + err.message);
+            alert('Erro ao excluir no Supabase: ' + err.message);
         }
     }
 };
@@ -209,21 +187,24 @@ window.resetForm = function() {
 };
 
 window.clearAllData = async function() {
-    if (confirm('ATENÇÃO: Isso apagará TODOS os clientes. Deseja continuar?')) {
+    if (confirm('ATENÇÃO: Isso apagará TODOS os clientes do Supabase. Deseja continuar?')) {
         try {
-            for (var i = 0; i < clients.length; i++) {
-                await gasPost({ id: clients[i].id, _method: 'DELETE' });
-            }
+            const { error } = await supabase
+                .from('clientes')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000'); // Apaga tudo
+
+            if (error) throw error;
+
             resetForm();
-            await new Promise(function(r) { setTimeout(r, 1500); });
             await loadClients();
         } catch (err) {
-            alert('Erro: ' + err.message);
+            alert('Erro ao limpar tudo: ' + err.message);
         }
     }
 };
 
-searchInput.addEventListener('input', function(e) {
+searchInput.addEventListener('input', (e) => {
     render(e.target.value);
 });
 
