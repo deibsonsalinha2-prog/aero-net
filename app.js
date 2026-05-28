@@ -51,8 +51,9 @@ function loadClients() {
             resolve();
         };
 
-        // Solicita o AllOrigins retornando o script como JSONP callback
-        var targetUrl = encodeURIComponent(API_URL + '?_nocache=' + Date.now());
+        // Solicita o AllOrigins retornando o script como JSONP callback (com cache-busting forte)
+        var cacheBuster = Date.now() + Math.random().toString(36).substring(2);
+        var targetUrl = encodeURIComponent(API_URL + '?_nocache=' + cacheBuster);
         script.src = 'https://api.allorigins.win/get?url=' + targetUrl + '&callback=' + cbName;
         
         script.onerror = function() {
