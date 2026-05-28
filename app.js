@@ -22,17 +22,32 @@ function getStatusBadge(status) {
     return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
 }
 
-// ✅ JSONP envolto em Promise — compatível com await
-function loadClients() {
-    return new Promise((resolve, reject) => {
-        const cbName = '_jsonp_cb_' + Date.now();
-        const script = document.createElement('script');
+// GET via fetch normal — o Apps Script retorna CORS headers para GET com JSON
+async function loadClients() {
+    try {
+        var response = await fetch(API_URL, { redirect: 'follow' });
+        var data = await response.json();
+        clients = Array.isArray(data) ? data : [];
+        render();
+    } catch (err) {
+        console.error('Erro ao carregar clientes:', err);
+        // Tenta fallback via JSONP se fetch falhar
+        return loadClientsJSONP();
+    }
+}
 
-        const timeout = setTimeout(() => {
+// Fallback JSONP caso o fetch com CORS não funcione
+function loadClientsJSONP() {
+    return new Promise(function(resolve) {
+        var cbName = '_jsonp_cb_' + Date.now();
+        var script = document.createElement('script');
+
+        var timeout = setTimeout(function() {
             delete window[cbName];
             script.remove();
-            reject(new Error('Timeout ao carregar clientes'));
-        }, 15000);
+            console.warn('JSONP timeout — mantendo lista atual');
+            resolve();
+        }, 10000);
 
         window[cbName] = function(data) {
             clearTimeout(timeout);
@@ -48,18 +63,20 @@ function loadClients() {
             clearTimeout(timeout);
             delete window[cbName];
             script.remove();
-            reject(new Error('Erro de rede ao carregar clientes'));
+            console.warn('JSONP falhou — mantendo lista atual');
+            resolve(); // resolve sem rejeitar para não bloquear o fluxo
         };
 
         document.head.appendChild(script);
     });
 }
 
-function render(filter = '') {
-    const filtered = clients.filter(c =>
-        (c.nome || '').toLowerCase().includes(filter.toLowerCase()) ||
-        (c.documento || '').includes(filter)
-    );
+function render(filter) {
+    filter = filter || '';
+    var filtered = clients.filter(function(c) {
+        return (c.nome || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1 ||
+               (c.documento || '').indexOf(filter) !== -1;
+    });
 
     tableBody.innerHTML = '';
 
@@ -67,26 +84,25 @@ function render(filter = '') {
         emptyState.classList.remove('hidden');
     } else {
         emptyState.classList.add('hidden');
-        filtered.forEach(client => {
-            const tr = document.createElement('tr');
+        filtered.forEach(function(client) {
+            var tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition-colors';
-            tr.innerHTML = `
-                <td class="px-6 py-4">
-                    <div class="font-medium text-slate-900">${client.nome}</div>
-                    <div class="text-xs text-slate-500">${client.documento} • ${client.telefone}</div>
-                </td>
-                <td class="px-6 py-4">
-                    <div class="text-slate-700">${client.plano}</div>
-                    <div class="text-xs text-slate-400 truncate max-w-[120px]">${client.endereco}</div>
-                </td>
-                <td class="px-6 py-4 text-slate-600">Dia ${client.vencimento}</td>
-                <td class="px-6 py-4 font-medium text-slate-700">${formatCurrency(client.valor_mensal)}</td>
-                <td class="px-6 py-4">${getStatusBadge(client.status)}</td>
-                <td class="px-6 py-4 text-right">
-                    <button onclick="editClient('${client.id}')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs mr-3">Editar</button>
-                    <button onclick="deleteClient('${client.id}')" class="text-rose-600 hover:text-rose-800 font-medium text-xs">Excluir</button>
-                </td>
-            `;
+            tr.innerHTML =
+                '<td class="px-6 py-4">' +
+                    '<div class="font-medium text-slate-900">' + client.nome + '</div>' +
+                    '<div class="text-xs text-slate-500">' + client.documento + ' • ' + client.telefone + '</div>' +
+                '</td>' +
+                '<td class="px-6 py-4">' +
+                    '<div class="text-slate-700">' + client.plano + '</div>' +
+                    '<div class="text-xs text-slate-400 truncate max-w-[120px]">' + client.endereco + '</div>' +
+                '</td>' +
+                '<td class="px-6 py-4 text-slate-600">Dia ' + client.vencimento + '</td>' +
+                '<td class="px-6 py-4 font-medium text-slate-700">' + formatCurrency(client.valor_mensal) + '</td>' +
+                '<td class="px-6 py-4">' + getStatusBadge(client.status) + '</td>' +
+                '<td class="px-6 py-4 text-right">' +
+                    '<button onclick="editClient(\'' + client.id + '\')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs mr-3">Editar</button>' +
+                    '<button onclick="deleteClient(\'' + client.id + '\')" class="text-rose-600 hover:text-rose-800 font-medium text-xs">Excluir</button>' +
+                '</td>';
             tableBody.appendChild(tr);
         });
     }
@@ -96,28 +112,26 @@ function render(filter = '') {
 
 function updateStats() {
     document.getElementById('stat-total').textContent = clients.length;
-    const revenue = clients.reduce((sum, c) => sum + parseFloat(c.valor_mensal || 0), 0);
+    var revenue = clients.reduce(function(sum, c) { return sum + parseFloat(c.valor_mensal || 0); }, 0);
     document.getElementById('stat-revenue').textContent = formatCurrency(revenue);
-    const overdue = clients.filter(c => c.status === 'inadimplente').length;
+    var overdue = clients.filter(function(c) { return c.status === 'inadimplente'; }).length;
     document.getElementById('stat-overdue').textContent = overdue;
 }
 
-// ✅ POST com mode:'no-cors' — o body text/plain É enviado ao servidor
-// PUT e DELETE são tunelados via _method no body (sem precisar de preflight CORS)
+// Envia POST com no-cors (corpo text/plain é enviado sem preflight CORS)
 function gasPost(payload) {
     return fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         redirect: 'follow',
         body: JSON.stringify(payload)
-        // Sem Content-Type header → browser usa text/plain → sem preflight CORS
     });
 }
 
-form.addEventListener('submit', async (e) => {
+form.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const clientData = {
+    var clientData = {
         nome: document.getElementById('nome').value,
         documento: document.getElementById('documento').value,
         telefone: document.getElementById('telefone').value,
@@ -128,32 +142,36 @@ form.addEventListener('submit', async (e) => {
         status: document.getElementById('status').value
     };
 
-    const originalText = btnSubmit.textContent;
+    var originalText = btnSubmit.textContent;
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Salvando...';
 
+    // 1. Salvar — erros aqui aparecem como "Erro ao salvar"
     try {
         if (editingId) {
-            await gasPost({ ...clientData, id: editingId, _method: 'PUT' });
+            await gasPost(Object.assign({}, clientData, { id: editingId, _method: 'PUT' }));
             resetForm();
         } else {
             await gasPost(clientData);
             form.reset();
         }
-
-        // Aguarda um segundo para o Apps Script processar antes de recarregar
-        await new Promise(r => setTimeout(r, 1200));
-        await loadClients();
     } catch (err) {
         alert('Erro ao salvar: ' + err.message);
-    } finally {
         btnSubmit.disabled = false;
         btnSubmit.textContent = originalText;
+        return;
     }
+
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = originalText;
+
+    // 2. Recarregar lista — falhas aqui NÃO mostram "Erro ao salvar"
+    await new Promise(function(r) { setTimeout(r, 1500); });
+    await loadClients();
 });
 
 window.editClient = function(id) {
-    const client = clients.find(c => c.id === id);
+    var client = clients.find(function(c) { return c.id === id; });
     if (!client) return;
 
     editingId = id;
@@ -169,16 +187,15 @@ window.editClient = function(id) {
     formTitle.textContent = 'Editar Cliente';
     btnSubmit.textContent = 'Salvar Alterações';
     btnCancelEdit.classList.remove('hidden');
-
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.deleteClient = async function(id) {
     if (confirm('Tem certeza que deseja excluir este cliente?')) {
         try {
-            await gasPost({ id, _method: 'DELETE' });
+            await gasPost({ id: id, _method: 'DELETE' });
             if (editingId === id) resetForm();
-            await new Promise(r => setTimeout(r, 1200));
+            await new Promise(function(r) { setTimeout(r, 1500); });
             await loadClients();
         } catch (err) {
             alert('Erro ao excluir: ' + err.message);
@@ -197,11 +214,11 @@ window.resetForm = function() {
 window.clearAllData = async function() {
     if (confirm('ATENÇÃO: Isso apagará TODOS os clientes. Deseja continuar?')) {
         try {
-            for (const client of clients) {
-                await gasPost({ id: client.id, _method: 'DELETE' });
+            for (var i = 0; i < clients.length; i++) {
+                await gasPost({ id: clients[i].id, _method: 'DELETE' });
             }
             resetForm();
-            await new Promise(r => setTimeout(r, 1200));
+            await new Promise(function(r) { setTimeout(r, 1500); });
             await loadClients();
         } catch (err) {
             alert('Erro: ' + err.message);
@@ -209,7 +226,7 @@ window.clearAllData = async function() {
     }
 };
 
-searchInput.addEventListener('input', (e) => {
+searchInput.addEventListener('input', function(e) {
     render(e.target.value);
 });
 
