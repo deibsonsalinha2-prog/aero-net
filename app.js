@@ -245,14 +245,20 @@ searchInput.addEventListener('input', (e) => {
 window.showSection = function(section) {
     document.getElementById('quick-access-cards').classList.add('hidden');
     document.getElementById('section-register').classList.add('hidden');
+    document.getElementById('section-register').classList.remove('section-visible');
     document.getElementById('section-list').classList.add('hidden');
-    document.getElementById('section-' + section).classList.remove('hidden');
+    document.getElementById('section-list').classList.remove('section-visible');
+    const target = document.getElementById('section-' + section);
+    target.classList.remove('hidden');
+    target.classList.add('section-visible');
     if (section === 'list') loadClients();
 };
 
 window.hideSections = function() {
     document.getElementById('section-register').classList.add('hidden');
+    document.getElementById('section-register').classList.remove('section-visible');
     document.getElementById('section-list').classList.add('hidden');
+    document.getElementById('section-list').classList.remove('section-visible');
     document.getElementById('quick-access-cards').classList.remove('hidden');
 };
 
