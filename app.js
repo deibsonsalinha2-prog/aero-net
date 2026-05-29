@@ -242,4 +242,10 @@ searchInput.addEventListener('input', (e) => {
     render(e.target.value);
 });
 
-loadClients();
+window.logout = async function() {
+    await supabaseClient.auth.signOut();
+    loginScreen.classList.remove('hidden');
+    dashboard.classList.add('hidden');
+};
+
+checkAuth();
