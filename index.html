@@ -62,7 +62,36 @@
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div id="login-screen" class="hidden min-h-[calc(100vh-5rem)] flex items-center justify-center">
+        <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100 w-full max-w-md">
+            <div class="text-center mb-6">
+                <svg class="w-12 h-12 mx-auto mb-3" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="38" stroke="#E2A020" stroke-width="2.5" stroke-dasharray="1 1" />
+                    <ellipse cx="50" cy="50" rx="38" ry="15" stroke="#E2A020" stroke-width="2" />
+                    <path d="M22 64 C 20 40, 50 30, 80 40" stroke="#0A2540" stroke-width="3.5" stroke-linecap="round" fill="none" />
+                    <path d="M70 38 L81 37 L78 45 L74 41 Z" fill="#0A2540" />
+                </svg>
+                <h1 class="text-2xl font-bold text-[#0A2540] tracking-wide uppercase">Aeronet</h1>
+                <p class="text-slate-400 text-xs mt-1 tracking-wider uppercase">Faça login para acessar o sistema</p>
+            </div>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 tracking-wider uppercase mb-1">E-mail</label>
+                    <input type="email" id="login-email" required class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus-ring-gold outline-none transition-all text-sm" placeholder="seu@email.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 tracking-wider uppercase mb-1">Senha</label>
+                    <input type="password" id="login-password" required class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus-ring-gold outline-none transition-all text-sm" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full bg-[#0A2540] hover:bg-[#12385c] text-white py-3 rounded-xl transition-all font-bold text-xs tracking-wider uppercase shadow-md" id="btn-login">
+                    Entrar
+                </button>
+                <p id="login-error" class="text-rose-600 text-xs text-center hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <main id="dashboard" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 hidden">
         
         <!-- Dashboard Stats Premium -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">

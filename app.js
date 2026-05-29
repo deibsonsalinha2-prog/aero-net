@@ -1,12 +1,47 @@
-// Configuração do Supabase
 const SUPABASE_URL = 'https://hpmnhcklygycxsqqoqak.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_szXj5gSZoACQW2fIW6xCug_LLCAFL3P';
 
-// Inicializar cliente do Supabase
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let clients = [];
 let editingId = null;
+
+const loginScreen = document.getElementById('login-screen');
+const dashboard = document.getElementById('dashboard');
+const loginForm = document.getElementById('login-form');
+const loginError = document.getElementById('login-error');
+
+async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+        loginScreen.classList.add('hidden');
+        dashboard.classList.remove('hidden');
+        loadClients();
+    } else {
+        loginScreen.classList.remove('hidden');
+        dashboard.classList.add('hidden');
+    }
+}
+
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    
+    if (error) {
+        loginError.textContent = 'E-mail ou senha incorretos.';
+        loginError.classList.remove('hidden');
+    } else {
+        loginError.classList.add('hidden');
+        loginScreen.classList.add('hidden');
+        dashboard.classList.remove('hidden');
+        loadClients();
+    }
+});
+
+checkAuth();
 
 const form = document.getElementById('client-form');
 const tableBody = document.getElementById('clients-table-body');
