@@ -20,14 +20,15 @@ function formatCurrency(value) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+// Badges Premium baseadas no estilo sofisticado
 function getStatusBadge(status) {
     if (status === 'ativo') {
-        return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Ativo</span>';
+        return '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Ativo</span>';
     }
-    return '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Inadimplente</span>';
+    return '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">Inadimplente</span>';
 }
 
-// Ler clientes do Supabase (Super rápido, sem CORS e sem cache!)
+// Ler clientes do Supabase
 async function loadClients() {
     try {
         const { data, error } = await supabaseClient
@@ -58,22 +59,22 @@ function render(filter = '') {
         emptyState.classList.add('hidden');
         filtered.forEach(client => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition-colors';
+            tr.className = 'hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0';
             tr.innerHTML = `
                 <td class="px-6 py-4">
-                    <div class="font-medium text-slate-900">${client.nome}</div>
-                    <div class="text-xs text-slate-500">${client.documento} • ${client.telefone}</div>
+                    <div class="font-bold text-slate-800">${client.nome}</div>
+                    <div class="text-xs text-slate-400 font-medium">${client.documento} • ${client.telefone}</div>
                 </td>
                 <td class="px-6 py-4">
-                    <div class="text-slate-700">${client.plano}</div>
-                    <div class="text-xs text-slate-400 truncate max-w-[120px]">${client.endereco}</div>
+                    <div class="text-slate-700 font-semibold text-xs uppercase tracking-wider">${client.plano}</div>
+                    <div class="text-xs text-slate-400 truncate max-w-[150px]">${client.endereco}</div>
                 </td>
-                <td class="px-6 py-4 text-slate-600">Dia ${client.vencimento}</td>
-                <td class="px-6 py-4 font-medium text-slate-700">${formatCurrency(client.valor_mensal)}</td>
+                <td class="px-6 py-4 text-slate-600 font-medium text-xs uppercase tracking-wider">Dia ${client.vencimento}</td>
+                <td class="px-6 py-4 font-bold text-slate-700">${formatCurrency(client.valor_mensal)}</td>
                 <td class="px-6 py-4">${getStatusBadge(client.status)}</td>
                 <td class="px-6 py-4 text-right">
-                    <button onclick="editClient('${client.id}')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs mr-3">Editar</button>
-                    <button onclick="deleteClient('${client.id}')" class="text-rose-600 hover:text-rose-800 font-medium text-xs">Excluir</button>
+                    <button onclick="editClient('${client.id}')" class="text-indigo-600 hover:text-indigo-800 font-bold text-xs tracking-wider uppercase mr-3 transition-colors">Editar</button>
+                    <button onclick="deleteClient('${client.id}')" class="text-rose-600 hover:text-rose-800 font-bold text-xs tracking-wider uppercase transition-colors">Excluir</button>
                 </td>
             `;
             tableBody.appendChild(tr);
@@ -91,7 +92,7 @@ function updateStats() {
     document.getElementById('stat-overdue').textContent = overdue;
 }
 
-// Salvar / Editar cliente no Supabase
+// Salvar / Editar cliente
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -112,7 +113,6 @@ form.addEventListener('submit', async (e) => {
 
     try {
         if (editingId) {
-            // Atualizar cliente existente
             const { error } = await supabaseClient
                 .from('clientes')
                 .update(clientData)
@@ -121,7 +121,6 @@ form.addEventListener('submit', async (e) => {
             if (error) throw error;
             resetForm();
         } else {
-            // Inserir novo cliente
             const { error } = await supabaseClient
                 .from('clientes')
                 .insert([clientData]);
@@ -192,7 +191,7 @@ window.clearAllData = async function() {
             const { error } = await supabaseClient
                 .from('clientes')
                 .delete()
-                .neq('id', '00000000-0000-0000-0000-000000000000'); // Apaga tudo
+                .neq('id', '00000000-0000-0000-0000-000000000000');
 
             if (error) throw error;
 
