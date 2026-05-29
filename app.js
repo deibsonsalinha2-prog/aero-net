@@ -242,6 +242,20 @@ searchInput.addEventListener('input', (e) => {
     render(e.target.value);
 });
 
+window.showSection = function(section) {
+    document.getElementById('quick-access-cards').classList.add('hidden');
+    document.getElementById('section-register').classList.add('hidden');
+    document.getElementById('section-list').classList.add('hidden');
+    document.getElementById('section-' + section).classList.remove('hidden');
+    if (section === 'list') loadClients();
+};
+
+window.hideSections = function() {
+    document.getElementById('section-register').classList.add('hidden');
+    document.getElementById('section-list').classList.add('hidden');
+    document.getElementById('quick-access-cards').classList.remove('hidden');
+};
+
 window.logout = async function() {
     await supabaseClient.auth.signOut();
     loginScreen.classList.remove('hidden');
